@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, useContext, useEffect, useState } from 'react';
-import { userAPI } from '../services/api';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { Animated } from 'react-native';
+import { tmdbAPI, userAPI } from '../services/api';
 
 const AuthContext = createContext();
 
@@ -10,21 +11,50 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [favoriteTmdbId, setFavoriteTmdbId] = useState(null);
 
-    // Uygulama açıldığında token kontrolü
+    // Global backdrop state
+    const [backdrops, setBackdrops] = useState([]);
+    const [currentBackdropIndex, setCurrentBackdropIndex] = useState(0);
+    const fadeAnim = useRef(new Animated.Value(1)).current;
+
     useEffect(() => {
         loadToken();
     }, []);
+
+    useEffect(() => {
+        if (favoriteTmdbId) {
+            tmdbAPI.getMovieBackdrops(favoriteTmdbId).then(data => {
+                if (data && data.length > 0) {
+                    setBackdrops(data);
+                    setCurrentBackdropIndex(0);
+                }
+            }).catch(console.error);
+        }
+    }, [favoriteTmdbId]);
+
+    useEffect(() => {
+        if (backdrops.length === 0) return;
+        const interval = setInterval(() => {
+            Animated.timing(fadeAnim, {
+                toValue: 0, duration: 500, useNativeDriver: true,
+            }).start(() => {
+                setCurrentBackdropIndex(prev =>
+                    prev === backdrops.length - 1 ? 0 : prev + 1
+                );
+                Animated.timing(fadeAnim, {
+                    toValue: 1, duration: 500, useNativeDriver: true,
+                }).start();
+            });
+        }, 15000);
+        return () => clearInterval(interval);
+    }, [backdrops]);
 
     const loadToken = async () => {
         try {
             const savedToken = await AsyncStorage.getItem('token');
             const savedUser = await AsyncStorage.getItem('user');
-
             if (savedToken && savedUser) {
                 setToken(savedToken);
                 setUser(JSON.parse(savedUser));
-
-                // ✅ favori filmi de yükle
                 try {
                     const profile = await userAPI.getProfile();
                     if (profile.favoriteTmdbId) {
@@ -58,13 +88,19 @@ export const AuthProvider = ({ children }) => {
             await AsyncStorage.removeItem('user');
             setToken(null);
             setUser(null);
+            setFavoriteTmdbId(null);
+            setBackdrops([]);
         } catch (error) {
             console.error('Logout hatası:', error);
         }
     };
 
     return (
-        <AuthContext.Provider value={{ user, token, loading, login, logout, favoriteTmdbId, setFavoriteTmdbId }}>
+        <AuthContext.Provider value={{
+            user, token, loading, login, logout,
+            favoriteTmdbId, setFavoriteTmdbId,
+            backdrops, currentBackdropIndex, fadeAnim
+        }}>
             {children}
         </AuthContext.Provider>
     );

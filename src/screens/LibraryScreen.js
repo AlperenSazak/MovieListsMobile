@@ -1,5 +1,5 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
     ActivityIndicator,
     Animated,
@@ -11,7 +11,7 @@ import {
     View,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
-import { moviesAPI, tmdbAPI } from '../services/api';
+import { moviesAPI } from '../services/api';
 
 function Toast({ message, type }) {
     if (!message) return null;
@@ -24,11 +24,8 @@ function Toast({ message, type }) {
     );
 }
 
-export default function LibraryScreen() {
-    const { favoriteTmdbId } = useAuth();
-    const [backdrops, setBackdrops] = useState([]);
-    const [currentBackdropIndex, setCurrentBackdropIndex] = useState(0);
-    const fadeAnim = useRef(new Animated.Value(1)).current;
+export default function LibraryScreen({ navigation }) {
+    const { backdrops, currentBackdropIndex, fadeAnim } = useAuth();
     const [movies, setMovies] = useState([]);
     const [loading, setLoading] = useState(true);
     const [toast, setToast] = useState({ message: '', type: '' });
@@ -50,31 +47,6 @@ export default function LibraryScreen() {
         }
     };
 
-    useEffect(() => {
-        if (favoriteTmdbId) {
-            tmdbAPI.getMovieBackdrops(favoriteTmdbId).then(data => {
-                if (data && data.length > 0) setBackdrops(data);
-            }).catch(console.error);
-        }
-    }, [favoriteTmdbId]);
-
-    useEffect(() => {
-        if (backdrops.length === 0) return;
-        const interval = setInterval(() => {
-            Animated.timing(fadeAnim, {
-                toValue: 0, duration: 500, useNativeDriver: true,
-            }).start(() => {
-                setCurrentBackdropIndex(prev =>
-                    prev === backdrops.length - 1 ? 0 : prev + 1
-                );
-                Animated.timing(fadeAnim, {
-                    toValue: 1, duration: 500, useNativeDriver: true,
-                }).start();
-            });
-        }, 15000);
-        return () => clearInterval(interval);
-    }, [backdrops]);
-
     useFocusEffect(
         useCallback(() => {
             loadMovies();
@@ -92,7 +64,21 @@ export default function LibraryScreen() {
     };
 
     const renderMovie = ({ item }) => (
-        <View style={styles.movieCard}>
+        <TouchableOpacity
+            style={styles.movieCard}
+            onPress={() => navigation.navigate('MovieDetail', {
+                movie: {
+                    id: item.tmdbId,
+                    tmdbId: item.tmdbId,
+                    title: item.title,
+                    overview: item.overview,
+                    posterPath: item.posterPath,
+                    backdropPath: item.backdropPath,
+                    releaseDate: item.releaseDate,
+                    voteAverage: item.voteAverage,
+                }
+            })}
+        >
             <View style={styles.moviePosterContainer}>
                 <Image
                     source={{
@@ -102,33 +88,21 @@ export default function LibraryScreen() {
                     }}
                     style={styles.moviePoster}
                 />
-                {!item.posterPath && (
-                    <Text style={styles.noPoster}>🎬</Text>
-                )}
+                {!item.posterPath && <Text style={styles.noPoster}>🎬</Text>}
             </View>
             <View style={styles.movieInfo}>
-                <Text style={styles.movieTitle} numberOfLines={2}>
-                    {item.title}
-                </Text>
-                <Text style={styles.movieYear}>
-                    📅 {item.releaseDate?.split('T')[0]?.split('-')[0] || 'N/A'}
-                </Text>
-                <Text style={styles.movieRating}>
-                    ⭐ {item.voteAverage?.toFixed(1) || 'N/A'}
-                </Text>
-                {item.overview ? (
-                    <Text style={styles.movieOverview} numberOfLines={3}>
-                        {item.overview}
-                    </Text>
-                ) : null}
+                <Text style={styles.movieTitle} numberOfLines={2}>{item.title}</Text>
+                <Text style={styles.movieYear}>📅 {item.releaseDate?.split('T')[0]?.split('-')[0] || 'N/A'}</Text>
+                <Text style={styles.movieRating}>⭐ {item.voteAverage?.toFixed(1) || 'N/A'}</Text>
+                {item.overview ? <Text style={styles.movieOverview} numberOfLines={3}>{item.overview}</Text> : null}
                 <TouchableOpacity
                     style={styles.deleteButton}
-                    onPress={() => handleDelete(item.id)}
+                    onPress={(e) => { e.stopPropagation(); handleDelete(item.id); }}
                 >
                     <Text style={styles.deleteButtonText}>🗑️ Sil</Text>
                 </TouchableOpacity>
             </View>
-        </View>
+        </TouchableOpacity>
     );
 
     return (
@@ -171,149 +145,32 @@ export default function LibraryScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: 'rgba(10,10,10,0.85)',
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 20,
-        paddingTop: 50,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.1)',
-    },
-    headerTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#667eea',
-    },
-    movieCount: {
-        color: '#888',
-        fontSize: 16,
-    },
-    loader: {
-        marginTop: 50,
-    },
-    emptyState: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 40,
-    },
-    emptyStateIcon: {
-        fontSize: 80,
-        marginBottom: 20,
-    },
-    emptyStateText: {
-        color: '#fff',
-        fontSize: 20,
-        fontWeight: 'bold',
-        marginBottom: 10,
-    },
-    emptyStateSubText: {
-        color: '#888',
-        fontSize: 16,
-        textAlign: 'center',
-    },
-    movieList: {
-        padding: 20,
-    },
-    movieCard: {
-        flexDirection: 'row',
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        borderRadius: 15,
-        marginBottom: 15,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
-    },
-    moviePoster: {
-        width: 100,
-        height: 150,
-        backgroundColor: '#333',
-    },
-    movieInfo: {
-        flex: 1,
-        padding: 12,
-    },
-    movieTitle: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: 'bold',
-        marginBottom: 5,
-    },
-    movieYear: {
-        color: '#888',
-        fontSize: 13,
-        marginBottom: 3,
-    },
-    movieRating: {
-        color: '#f093fb',
-        fontSize: 13,
-        marginBottom: 10,
-    },
-    deleteButton: {
-        backgroundColor: 'rgba(220, 53, 69, 0.3)',
-        borderWidth: 1,
-        borderColor: 'rgba(220, 53, 69, 0.5)',
-        borderRadius: 8,
-        padding: 8,
-        alignItems: 'center',
-        marginTop: 'auto',
-    },
-    deleteButtonText: {
-        color: '#dc3545',
-        fontSize: 13,
-        fontWeight: '600',
-    },
-    toast: {
-        padding: 15,
-        borderRadius: 10,
-        marginHorizontal: 20,
-        marginTop: 10,
-    },
-    toastError: {
-        backgroundColor: 'rgba(220, 53, 69, 0.95)',
-    },
-    toastSuccess: {
-        backgroundColor: 'rgba(17, 153, 142, 0.95)',
-    },
-    toastText: {
-        color: '#ffffff',
-        fontSize: 16,
-        fontWeight: '600',
-        textAlign: 'center',
-    },
-    moviePosterContainer: {
-        width: 100,
-        height: 150,
-        backgroundColor: '#333',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    noPoster: {
-        fontSize: 40,
-        position: 'absolute',
-    },
-    movieOverview: {
-        color: '#aaa',
-        fontSize: 12,
-        lineHeight: 18,
-        marginBottom: 10,
-    },
-    backdropContainer: {
-        position: 'absolute',
-        top: 0, left: 0, right: 0, bottom: 0,
-    },
-    backdrop: {
-        width: '100%',
-        height: '100%',
-    },
-    backdropOverlay: {
-        position: 'absolute',
-        top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.6)',
-    },
+    container: { flex: 1, backgroundColor: 'rgba(10,10,10,0.85)' },
+    backdropContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+    backdrop: { width: '100%', height: '100%' },
+    backdropOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 50, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' },
+    headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#667eea' },
+    movieCount: { color: '#888', fontSize: 16 },
+    loader: { marginTop: 50 },
+    emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
+    emptyStateIcon: { fontSize: 80, marginBottom: 20 },
+    emptyStateText: { color: '#fff', fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
+    emptyStateSubText: { color: '#888', fontSize: 16, textAlign: 'center' },
+    movieList: { padding: 20 },
+    movieCard: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 15, marginBottom: 15, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+    moviePosterContainer: { width: 100, height: 150, backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' },
+    moviePoster: { width: 100, height: 150, backgroundColor: '#333' },
+    noPoster: { fontSize: 40, position: 'absolute' },
+    movieInfo: { flex: 1, padding: 12 },
+    movieTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginBottom: 5 },
+    movieYear: { color: '#888', fontSize: 13, marginBottom: 3 },
+    movieRating: { color: '#f093fb', fontSize: 13, marginBottom: 10 },
+    movieOverview: { color: '#aaa', fontSize: 12, lineHeight: 18, marginBottom: 10 },
+    deleteButton: { backgroundColor: 'rgba(220, 53, 69, 0.3)', borderWidth: 1, borderColor: 'rgba(220, 53, 69, 0.5)', borderRadius: 8, padding: 8, alignItems: 'center', marginTop: 'auto' },
+    deleteButtonText: { color: '#dc3545', fontSize: 13, fontWeight: '600' },
+    toast: { padding: 15, borderRadius: 10, marginHorizontal: 20, marginTop: 10 },
+    toastError: { backgroundColor: 'rgba(220, 53, 69, 0.95)' },
+    toastSuccess: { backgroundColor: 'rgba(17, 153, 142, 0.95)' },
+    toastText: { color: '#ffffff', fontSize: 16, fontWeight: '600', textAlign: 'center' },
 });

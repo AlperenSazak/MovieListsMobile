@@ -81,14 +81,6 @@ export const watchLaterAPI = {
         }),
 };
 
-export const userAPI = {
-    getProfile: () => apiCall('/Users/profile'),
-    setFavoriteMovie: (tmdbId) =>
-        apiCall(`/Users/favorite-movie/${tmdbId}`, {
-            method: 'PUT',
-        }),
-};
-
 export const tmdbAPI = {
     getPopular: (page = 1) => apiCall(`/Tmdb/popular?page=${page}`),
     getGenres: () => apiCall('/Tmdb/genres'),  // 🔥 EKLE
@@ -97,3 +89,42 @@ export const tmdbAPI = {
     searchMovies: (query) => apiCall(`/Tmdb/search?query=${encodeURIComponent(query)}`),
     discover: (category = 'popular', page = 1) => apiCall(`/Tmdb/discover?category=${category}&page=${page}`),
 };
+
+export const commentsAPI = {
+    getMovieComments: (tmdbId) => apiCall(`/Comments/movie/${tmdbId}`),
+
+    createComment: (tmdbId, content) =>
+        apiCall('/Comments', {
+            method: 'POST',
+            body: JSON.stringify({ movieId: tmdbId, content }),
+        }),
+
+    deleteComment: (id) =>
+        apiCall(`/Comments/${id}`, {
+            method: 'DELETE',
+        }),
+};
+
+export const movieLikesAPI = {
+    getStats: (movieId) => apiCall(`/MovieLikes/movie/${movieId}/stats`),
+
+    toggleLike: (movieId, isLiked) =>
+        apiCall('/MovieLikes', {
+            method: 'POST',
+            body: JSON.stringify({ movieId, isLiked }),
+        }),
+};
+
+export const userAPI = {
+    getProfile: () => apiCall('/Users/profile'),
+    setFavoriteMovie: (tmdbId) =>
+        apiCall(`/Users/favorite-movie/${tmdbId}`, {
+            method: 'PUT',
+        }),
+    updateProfilePhoto: (profilePhoto) =>
+        apiCall('/Users/profile-photo', {
+            method: 'PUT',
+            body: JSON.stringify({ profilePhoto }),
+        }),
+};
+
