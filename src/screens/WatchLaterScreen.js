@@ -1,7 +1,8 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Animated,
     FlatList,
     Image,
     StyleSheet,
@@ -9,7 +10,8 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { moviesAPI, watchLaterAPI } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
+import { moviesAPI, tmdbAPI, watchLaterAPI } from '../services/api';
 
 function Toast({ message, type }) {
     if (!message) return null;
@@ -23,6 +25,10 @@ function Toast({ message, type }) {
 }
 
 export default function WatchLaterScreen() {
+    const { favoriteTmdbId } = useAuth();
+    const [backdrops, setBackdrops] = useState([]);
+    const [currentBackdropIndex, setCurrentBackdropIndex] = useState(0);
+    const fadeAnim = useRef(new Animated.Value(1)).current;
     const [movies, setMovies] = useState([]);
     const [loading, setLoading] = useState(true);
     const [toast, setToast] = useState({ message: '', type: '' });
@@ -49,6 +55,31 @@ export default function WatchLaterScreen() {
             loadMovies();
         }, [])
     );
+
+    useEffect(() => {
+        if (favoriteTmdbId) {
+            tmdbAPI.getMovieBackdrops(favoriteTmdbId).then(data => {
+                if (data && data.length > 0) setBackdrops(data);
+            }).catch(console.error);
+        }
+    }, [favoriteTmdbId]);
+
+    useEffect(() => {
+        if (backdrops.length === 0) return;
+        const interval = setInterval(() => {
+            Animated.timing(fadeAnim, {
+                toValue: 0, duration: 500, useNativeDriver: true,
+            }).start(() => {
+                setCurrentBackdropIndex(prev =>
+                    prev === backdrops.length - 1 ? 0 : prev + 1
+                );
+                Animated.timing(fadeAnim, {
+                    toValue: 1, duration: 500, useNativeDriver: true,
+                }).start();
+            });
+        }, 15000);
+        return () => clearInterval(interval);
+    }, [backdrops]);
 
     const handleDelete = async (id) => {
         try {
@@ -87,7 +118,7 @@ export default function WatchLaterScreen() {
                     source={{
                         uri: item.posterPath
                             ? `https://image.tmdb.org/t/p/w200${item.posterPath}`
-                            : null
+                            : 'https://via.placeholder.com/200x300'
                     }}
                     style={styles.moviePoster}
                 />
@@ -130,9 +161,18 @@ export default function WatchLaterScreen() {
 
     return (
         <View style={styles.container}>
+            {backdrops.length > 0 && (
+                <Animated.View style={[styles.backdropContainer, { opacity: fadeAnim }]}>
+                    <Image
+                        source={{ uri: `https://image.tmdb.org/t/p/w780${backdrops[currentBackdropIndex]}` }}
+                        style={styles.backdrop}
+                    />
+                    <View style={styles.backdropOverlay} />
+                </Animated.View>
+            )}
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>⏰ Daha Sonra İzle</Text>
-                <Text style={styles.movieCount}>{movies.length} film</Text>
+                <Text style={styles.movieCount}>{movies.length} Film</Text>
             </View>
 
             <Toast message={toast.message} type={toast.type} />
@@ -308,5 +348,18 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
         textAlign: 'center',
+    },
+    backdropContainer: {
+        position: 'absolute',
+        top: 0, left: 0, right: 0, bottom: 0,
+    },
+    backdrop: {
+        width: '100%',
+        height: '100%',
+    },
+    backdropOverlay: {
+        position: 'absolute',
+        top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.6)',
     },
 });

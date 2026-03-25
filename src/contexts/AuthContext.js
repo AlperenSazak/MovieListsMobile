@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useState } from 'react';
+import { userAPI } from '../services/api';
 
 const AuthContext = createContext();
 
@@ -7,6 +8,7 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [token, setToken] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [favoriteTmdbId, setFavoriteTmdbId] = useState(null);
 
     // Uygulama açıldığında token kontrolü
     useEffect(() => {
@@ -21,6 +23,16 @@ export const AuthProvider = ({ children }) => {
             if (savedToken && savedUser) {
                 setToken(savedToken);
                 setUser(JSON.parse(savedUser));
+
+                // ✅ favori filmi de yükle
+                try {
+                    const profile = await userAPI.getProfile();
+                    if (profile.favoriteTmdbId) {
+                        setFavoriteTmdbId(profile.favoriteTmdbId);
+                    }
+                } catch (e) {
+                    console.warn('Profil yüklenemedi:', e);
+                }
             }
         } catch (error) {
             console.error('Token yükleme hatası:', error);
@@ -52,7 +64,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, token, loading, login, logout }}>
+        <AuthContext.Provider value={{ user, token, loading, login, logout, favoriteTmdbId, setFavoriteTmdbId }}>
             {children}
         </AuthContext.Provider>
     );

@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Animated,
     FlatList,
     Image,
     Modal,
@@ -26,7 +27,7 @@ function Toast({ message, type }) {
 }
 
 export default function HomeScreen({ navigation }) {
-    const { user, logout } = useAuth();
+    const { user, favoriteTmdbId } = useAuth();
     const [searchQuery, setSearchQuery] = useState('');
     const [movies, setMovies] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -40,6 +41,9 @@ export default function HomeScreen({ navigation }) {
     const [genres, setGenres] = useState([]);
     const [selectedGenre, setSelectedGenre] = useState(null);
     const [showGenreModal, setShowGenreModal] = useState(false);
+    const [backdrops, setBackdrops] = useState([]);
+    const [currentBackdropIndex, setCurrentBackdropIndex] = useState(0);
+    const fadeAnim = useRef(new Animated.Value(1)).current;
 
     const showToast = (message, type = 'success') => {
         setToast({ message, type });
@@ -47,11 +51,35 @@ export default function HomeScreen({ navigation }) {
     };
 
     useEffect(() => {
-        const randomPage = Math.floor(Math.random() * 10) + 1; // 1-10 arası random
+        const randomPage = Math.floor(Math.random() * 10) + 1;
         setPopularPage(randomPage);
+        setPopularMovies([]);
         loadPopularMovies(randomPage);
         loadGenres();
     }, []);
+
+    useEffect(() => {
+        if (backdrops.length === 0) return;
+        const interval = setInterval(() => {
+            Animated.timing(fadeAnim, {
+                toValue: 0,
+                duration: 500,
+                useNativeDriver: true,
+            }).start(() => {
+                // fade out bitti, şimdi fotoğrafı değiştir
+                setCurrentBackdropIndex(prev =>
+                    prev === backdrops.length - 1 ? 0 : prev + 1
+                );
+                // sonra fade in
+                Animated.timing(fadeAnim, {
+                    toValue: 1,
+                    duration: 500,
+                    useNativeDriver: true,
+                }).start();
+            });
+        }, 15000);
+        return () => clearInterval(interval);
+    }, [backdrops]);
 
     const loadGenres = async () => {
         try {
@@ -61,6 +89,14 @@ export default function HomeScreen({ navigation }) {
             console.error('Türler yüklenemedi:', error);
         }
     };
+
+    useEffect(() => {
+        if (favoriteTmdbId) {
+            tmdbAPI.getMovieBackdrops(favoriteTmdbId).then(data => {
+                if (data && data.length > 0) setBackdrops(data);
+            }).catch(console.error);
+        }
+    }, [favoriteTmdbId]);
 
     const handleGenreSelect = async (genre) => {
         if (selectedGenre?.id === genre.id) {
@@ -85,32 +121,36 @@ export default function HomeScreen({ navigation }) {
 
     const loadPopularMovies = async (page = 1) => {
         try {
-            const [popular, myMovies] = await Promise.all([
-                tmdbAPI.getPopular(page),
-                moviesAPI.getMyMovies(),
-            ]);
+            const popular = await tmdbAPI.getPopular(page);
 
-            const myIds = myMovies.map(m => m.tmdbId);
+            let myIds = [];
+            try {
+                const myMovies = await moviesAPI.getMyMovies();
+                myIds = myMovies.map(m => m.tmdbId);
+            } catch (e) {
+                console.warn('My-movies alınamadı:', e);
+            }
+
             setMyMovieIds(myIds);
 
             const filtered = (popular.results || []).filter(
                 m => !myIds.includes(m.id)
             );
 
-            if (page === 1) {
-                setPopularMovies(filtered);
-            } else {
-                setPopularMovies(prev => [...prev, ...filtered]); // 🔥 Ekle
-            }
+            setPopularMovies(prev => {
+                const existingIds = new Set(prev.map(m => m.id));
+                const newMovies = filtered.filter(m => !existingIds.has(m.id));
+                return [...prev, ...newMovies];
+            });
         } catch (error) {
             console.error('Popüler filmler yüklenemedi:', error);
         }
     };
 
-    const handleSearch = async () => {
+    const handleSearch = useCallback(async () => {
         if (!searchQuery.trim()) return;
         await handleLiveSearch(searchQuery);
-    };
+    }, [searchQuery]);
 
     const handleLiveSearch = (text) => {
         setSearchQuery(text);
@@ -143,12 +183,12 @@ export default function HomeScreen({ navigation }) {
             await moviesAPI.addMovie({
                 tmdbId: item.id,
                 title: item.title,
-                originalTitle: item.original_title,
+                originalTitle: item.original_title || item.original_Title,
                 overview: item.overview,
-                posterPath: item.poster_path,
-                backdropPath: item.backdrop_path,
-                releaseDate: item.release_date,
-                voteAverage: item.vote_average,
+                posterPath: item.poster_path || item.poster_Path,
+                backdropPath: item.backdrop_path || item.backdrop_Path,
+                releaseDate: item.release_date || item.release_Date,
+                voteAverage: item.vote_average || item.vote_Average,
                 genres: item.genre_ids?.join(','),
             });
             showToast(`${item.title} kütüphaneye eklendi!`, 'success');
@@ -168,10 +208,10 @@ export default function HomeScreen({ navigation }) {
                 tmdbId: item.id,
                 title: item.title,
                 overview: item.overview,
-                posterPath: item.poster_path,
-                backdropPath: item.backdrop_path,
-                releaseDate: item.release_date,
-                voteAverage: item.vote_average,
+                posterPath: item.poster_path || item.poster_Path,      // ✅
+                backdropPath: item.backdrop_path || item.backdrop_Path, // ✅
+                releaseDate: item.release_date || item.release_Date,    // ✅
+                voteAverage: item.vote_average || item.vote_Average,    // ✅
                 genres: item.genre_ids?.join(','),
             });
             showToast(`${item.title} listeye eklendi!`, 'success');
@@ -195,8 +235,8 @@ export default function HomeScreen({ navigation }) {
         >
             <Image
                 source={{
-                    uri: item.poster_path
-                        ? `https://image.tmdb.org/t/p/w200${item.poster_path}`
+                    uri: (item.poster_path || item.poster_Path)
+                        ? `https://image.tmdb.org/t/p/w200${item.poster_path || item.poster_Path}`
                         : 'https://via.placeholder.com/200x300'
                 }}
                 style={styles.moviePoster}
@@ -235,6 +275,15 @@ export default function HomeScreen({ navigation }) {
 
     return (
         <View style={styles.container}>
+            {backdrops.length > 0 && (
+                <Animated.View style={[styles.backdropContainer, { opacity: fadeAnim }]}>
+                    <Image
+                        source={{ uri: `https://image.tmdb.org/t/p/w780${backdrops[currentBackdropIndex]}` }}
+                        style={styles.backdrop}
+                    />
+                    <View style={styles.backdropOverlay} />
+                </Animated.View>
+            )}
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>🎬 SineVizör</Text>
                 {/* <TouchableOpacity onPress={logout} style={styles.logoutBtn}>
@@ -678,5 +727,18 @@ const styles = StyleSheet.create({
     },
     genreGridTextActive: {
         color: '#667eea',
+    },
+    backdropContainer: {
+        position: 'absolute',
+        top: 0, left: 0, right: 0, bottom: 0,
+    },
+    backdrop: {
+        width: '100%',
+        height: '100%',
+    },
+    backdropOverlay: {
+        position: 'absolute',
+        top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.6)',
     },
 });

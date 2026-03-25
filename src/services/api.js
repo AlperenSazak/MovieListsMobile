@@ -28,8 +28,8 @@ export const apiCall = async (endpoint, options = {}) => {
     const responseText = await response.text();
     console.log('Response body:', responseText);
 
-    if (!response.ok) {
-        throw new Error(responseText || `API Error: ${response.status}`);
+    if (response.status === 204 || !responseText) {
+        return null;
     }
 
     return JSON.parse(responseText);

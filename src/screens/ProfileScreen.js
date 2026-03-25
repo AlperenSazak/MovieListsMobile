@@ -26,13 +26,12 @@ function Toast({ message, type }) {
 }
 
 export default function ProfileScreen() {
-    const { user, logout } = useAuth();
+    const { user, logout, favoriteTmdbId, setFavoriteTmdbId } = useAuth();
     const [stats, setStats] = useState({ movieCount: 0, watchLaterCount: 0 });
     const [loading, setLoading] = useState(true);
     const [toast, setToast] = useState({ message: '', type: '' });
 
     // Favori film
-    const [favoriteTmdbId, setFavoriteTmdbId] = useState(null);
     const [backdrops, setBackdrops] = useState([]);
     const [currentBackdropIndex, setCurrentBackdropIndex] = useState(0);
     const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -83,7 +82,6 @@ export default function ProfileScreen() {
         }
     };
 
-    // 10 sn'de bir backdrop değiştir
     useEffect(() => {
         if (backdrops.length === 0) return;
 
@@ -106,7 +104,7 @@ export default function ProfileScreen() {
                     prev === backdrops.length - 1 ? 0 : prev + 1
                 );
             }, 500);
-        }, 10000);
+        }, 15000);
 
         return () => clearInterval(interval);
     }, [backdrops]);
@@ -133,7 +131,7 @@ export default function ProfileScreen() {
     const handleSelectFavorite = async (movie) => {
         try {
             await userAPI.setFavoriteMovie(movie.id);
-            setFavoriteTmdbId(movie.id);
+            setFavoriteTmdbId(movie.id); // ✅ global güncelle
             setShowSearch(false);
             setSearchQuery('');
             setSearchResults([]);
@@ -250,9 +248,9 @@ export default function ProfileScreen() {
                             >
                                 <Image
                                     source={{
-                                        uri: movie.poster_path
-                                            ? `https://image.tmdb.org/t/p/w92${movie.poster_path}`
-                                            : null
+                                        uri: (movie.poster_path || movie.poster_Path)
+                                            ? `https://image.tmdb.org/t/p/w92${movie.poster_path || movie.poster_Path}`
+                                            : 'https://via.placeholder.com/100x150'
                                     }}
                                     style={styles.resultPoster}
                                 />
@@ -301,11 +299,11 @@ const styles = StyleSheet.create({
         top: 0,
         left: 0,
         right: 0,
-        height: 300,
+        bottom: 0,
     },
     backdrop: {
         width: '100%',
-        height: 300,
+        height: '100%',
     },
     backdropOverlay: {
         position: 'absolute',

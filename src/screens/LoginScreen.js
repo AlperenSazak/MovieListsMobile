@@ -41,18 +41,30 @@ export default function LoginScreen({ navigation }) {
         setLoading(true);
         try {
             const response = await authAPI.login(email, password);
+
+            if (!response.token) {
+                showToast(response.message || 'Email veya şifre yanlış!', 'error');
+                return;
+            }
+
             await login(response.token, {
                 username: response.username,
                 email: response.email || email
             });
             showToast('Giriş başarılı!', 'success');
-            console.log('Login response:', response);
         } catch (error) {
+            const msg = error.message || '';
             try {
-                const errorObj = JSON.parse(error.message);
-                showToast(errorObj.message || 'Email veya şifre yanlış!', 'error');
+                const errorObj = JSON.parse(msg);
+                showToast(errorObj.message || errorObj.title || 'Email veya şifre yanlış!', 'error');
             } catch {
-                showToast('Email veya şifre yanlış!', 'error');
+                if (msg.includes('401') || msg.includes('Unauthorized')) {
+                    showToast('Email veya şifre yanlış!', 'error');
+                } else if (msg.includes('404')) {
+                    showToast('Kullanıcı bulunamadı!', 'error');
+                } else {
+                    showToast(msg || 'Giriş başarısız!', 'error');
+                }
             }
         } finally {
             setLoading(false);
@@ -61,7 +73,6 @@ export default function LoginScreen({ navigation }) {
 
     return (
         <View style={styles.container}>
-            <Toast message={toast.message} type={toast.type} />
             <View style={styles.content}>
                 <Text style={styles.logo}>🎬</Text>
                 <Text style={styles.title}>SineVizör</Text>
